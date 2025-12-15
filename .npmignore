@@ -1,0 +1,40 @@
+# Source files (distのみ公開)
+src/
+tests/
+scripts/
+
+# Config files
+tsconfig.json
+jest.config.js
+.prettierrc
+.eslintrc
+
+# Environment
+.env
+.env.*
+secret/
+secrets/
+credentials.json
+client_secret*.json
+*_credentials.json
+*_token.json
+*.pem
+*.p12
+*.p8
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+
+# CI/CD
+.github/
+
+# Misc
+node_modules/
+coverage/
+*.log
+

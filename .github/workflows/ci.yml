@@ -1,0 +1,97 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  NODE_VERSION: '18.20.8'
+  NPM_VERSION: '10.8.2'
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sample-ai-agent
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install specific npm version
+        run: npm install -g npm@${{ env.NPM_VERSION }}
+
+      - name: Clean npm cache
+        run: npm cache clean --force
+
+      - name: Download and install sample-mcp
+        run: |
+          # GitHub APIを使ってtarballをダウンロード（publicリポジトリなので認証不要）
+          echo "Downloading sample-mcp tarball..."
+          curl -L -f \
+            https://api.github.com/repos/Kate-AC/sample-mcp/tarball/main \
+            -o sample-mcp.tar.gz
+          
+          # 一時ディレクトリに展開
+          mkdir -p temp-mcp-kit
+          tar -xzf sample-mcp.tar.gz -C temp-mcp-kit --strip-components=1
+          
+          # ビルドしてパック
+          cd temp-mcp-kit
+          npm ci
+          npm run build
+          npm pack
+          mv *.tgz ../
+          cd ..
+          
+          # package.jsonの依存を必ずローカルtarballに置換（形式差異を吸収）
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            if (!pkg.dependencies) pkg.dependencies = {};
+            pkg.dependencies["sample-mcp-kit"] = "file:./sample-mcp-kit-1.0.0.tgz";
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+            console.log("package.json pinned sample-mcp to local tarball");
+          '
+
+          # lockfileを更新（依存解決をtarballに固定）
+          npm install --package-lock-only
+          
+      - name: Install dependencies
+        run: |
+          echo "Checking if sample-mcp tarball exists:"
+          ls -la *.tgz || echo "No tarball found"
+          echo "Configuring git URL rewrite to use HTTPS with GITHUB_TOKEN"
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          echo "Running npm ci..."
+          npm ci
+          echo "Checking if sample-mcp is in node_modules:"
+          ls -la node_modules/sample-mcp-kit/ || echo "Not found in node_modules"
+
+      - name: Setup test environment variables
+        run: |
+          cat > .env << EOF
+          SLACK_USER_OAUTH_TOKEN=dummy-slack-user-token
+          SLACK_BOT_USER_OAUTH_TOKEN=dummy-slack-bot-token
+          SLACK_BOT_USER_NAME=test-bot
+          AWS_BEARER_TOKEN_BEDROCK=dummy-bedrock-token
+          REDMINE_API_KEY=test-redmine-key
+          EOF
+
+      - name: Clear Jest cache
+        run: npx jest --clearCache
+
+      - name: Run tests
+        run: npm test
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🔍 CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
