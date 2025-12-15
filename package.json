@@ -1,0 +1,26 @@
+{
+  "name": "sample-ai-agent",
+  "version": "1.0.0",
+  "description": "Sample AI Agent",
+  "scripts": {
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "monitor:slack": "ts-node src/presentation/slackMonitorCli.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.0",
+    "sample-mcp": "github:Kate-AC/sample-mcp#main"
+  },
+  "devDependencies": {
+    "@trivago/prettier-plugin-sort-imports": "^5.2.2",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^20.0.0",
+    "jest": "^30.2.0",
+    "prettier": "^3.6.2",
+    "ts-jest": "^29.4.5",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.0.0"
+  }
+}

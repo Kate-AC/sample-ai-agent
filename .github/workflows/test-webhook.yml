@@ -1,0 +1,125 @@
+name: Test Webhook
+
+on:
+  workflow_dispatch:
+    inputs:
+      slack_url:
+        description: 'SlackメッセージURL（Zapier経由で渡される）'
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: '18.20.8'
+  NPM_VERSION: '10.8.2'
+
+jobs:
+  test-webhook:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout sample-ai-agent
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install specific npm version
+        run: npm install -g npm@${{ env.NPM_VERSION }}
+
+      - name: Clean npm cache
+        run: npm cache clean --force
+
+      - name: Download and install sample-mcp
+        env:
+          GH_TOKEN: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+        run: |
+          # GitHub APIを使ってtarballをダウンロード
+          echo "Downloading sample-mcp tarball..."
+          curl -L -H "Authorization: token ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://api.github.com/repos/Kate-AC/sample-mcp/tarball/main \
+            -o sample-mcp.tar.gz
+          
+          # 一時ディレクトリに展開
+          mkdir -p temp-mcp-kit
+          tar -xzf sample-mcp.tar.gz -C temp-mcp-kit --strip-components=1
+          
+          # ビルドしてパック
+          cd temp-mcp-kit
+          npm ci
+          npm run build
+          npm pack
+          mv *.tgz ../
+          cd ..
+          
+          # package.jsonの依存を必ずローカルtarballに置換（表記差異を吸収）
+          node -e '
+            const fs = require("fs");
+            const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+            pkg.dependencies = pkg.dependencies || {};
+            pkg.dependencies["sample-mcp"] = "file:./sample-mcp-1.0.0.tgz";
+            fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+            console.log("Pinned sample-mcp to local tarball in package.json");
+          '
+
+          # lockfileを更新（依存解決をtarballに固定）
+          npm install --package-lock-only
+
+      - name: Install dependencies
+        run: |
+          echo "Checking if sample-mcp tarball exists:"
+          ls -la *.tgz || echo "No tarball found"
+          echo "Configuring git URL rewrite to use HTTPS with GITHUB_TOKEN"
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "ssh://git@github.com/"
+          git config --global url."https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "git@github.com:"
+          echo "Running npm ci..."
+          npm ci
+
+      - name: Setup environment variables
+        run: |
+          cat > .env << EOF
+          AWS_BEARER_TOKEN_BEDROCK=${{ secrets.AWS_BEARER_TOKEN_BEDROCK }}
+          SLACK_USER_OAUTH_TOKEN=${{ secrets.SLACK_USER_OAUTH_TOKEN }}
+          SLACK_BOT_USER_OAUTH_TOKEN=${{ secrets.SLACK_BOT_USER_OAUTH_TOKEN }}
+          SLACK_BOT_USER_NAME=${{ secrets.SLACK_BOT_USER_NAME }}
+          REDMINE_API_KEY=${{ secrets.REDMINE_API_KEY }}
+          SLACK_BOT_USER_NAME=${{ secrets.SLACK_BOT_USER_NAME }}
+          EOF
+
+      - name: Display received URL
+        run: |
+          echo "🔗 Received Slack URL: ${{ inputs.slack_url }}"
+          echo "⏰ 開始時刻: $(date)"
+
+      - name: Run Slack Monitor with URL
+        run: |
+          echo "🤖 Starting Slack Monitor with URL..."
+          echo "📎 Processing URL: ${{ inputs.slack_url }}"
+
+          npm run monitor:slack url "${{ inputs.slack_url }}" || {
+            echo "❌ Slack Monitor が失敗しました"
+            echo "📋 エラー詳細:"
+            echo "終了コード: $?"
+            echo "⏰ 終了時刻: $(date)"
+            exit 1
+          }
+          
+          echo "✅ Slack Monitor が正常に完了しました"
+          echo "⏰ 終了時刻: $(date)"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## 🔗 Test Webhook Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 項目 | 値 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| **実行日時** | $(date -u '+%Y-%m-%d %H:%M:%S') UTC |" >> $GITHUB_STEP_SUMMARY
+          echo "| **受け取ったURL** | ${{ inputs.slack_url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **ステータス** | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+

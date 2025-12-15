@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "lib": ["ES2020"],
+    "outDir": "./dist",
+    "baseUrl": ".",
+    "paths": {
+      "domain/*": ["src/domain/*"],
+      "application/*": ["src/application/*"],
+      "infrastructure/*": ["src/infrastructure/*"],
+      "presentation/*": ["src/presentation/*"]
+    },
+    "typeRoots": ["./node_modules/@types", "./types"], // ←これを追加
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["src", "tests", "types"]
+}

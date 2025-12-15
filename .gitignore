@@ -1,0 +1,29 @@
+
+# Node.js依存関係
+node_modules/
+
+# ログファイル
+*.log
+
+# 環境変数ファイル
+.env
+
+# 秘密ファイル・トークンファイル
+secret/
+
+# OS生成ファイル
+.DS_Store
+Thumbs.db
+
+# ビルド成果物
+dist/
+
+# directionsディレクトリ（.gitkeepは除外）
+directions/*
+!directions/.gitkeep
+
+# planningsディレクトリ（.gitkeepは除外）
+plannings/*
+!plannings/.gitkeep
+
+/.cache
